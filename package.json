@@ -1,6 +1,6 @@
 {
   "name": "@averildwi/nest-prisma",
-  "version": "1.0.7",
+  "version": "2.0.0",
   "description": "Interactive CLI that sets up Prisma ORM 7 with a driver adapter (PostgreSQL or MySQL/MariaDB) in an existing NestJS project.",
   "main": "bin/generate-interactive.js",
   "bin": {
