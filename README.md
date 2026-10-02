@@ -2,74 +2,105 @@
 
 [![npm version](https://img.shields.io/npm/v/@averildwi/nest-prisma.svg)](https://www.npmjs.com/package/@averildwi/nest-prisma)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org)
+[![Node.js](https://img.shields.io/badge/node-%5E20.19%20%7C%7C%20%5E22.12%20%7C%7C%20%3E%3D24-brightgreen)](https://nodejs.org)
 [![NestJS](https://img.shields.io/badge/NestJS-v11-red)](https://nestjs.com)
 
-A CLI scaffolder that sets up [Prisma ORM](https://www.prisma.io/) 7 with Driver
-Adapter inside a [NestJS](https://nestjs.com/) project in a single interactive command.
-Built to avoid the repetitive manual setup (install client, driver adapter, run
-`prisma init`, write `PrismaModule`/`PrismaService`, register into `AppModule`)
-every time you start a new backend.
+An interactive CLI that sets up [Prisma ORM](https://www.prisma.io/) 7 with a
+driver adapter inside an existing [NestJS](https://nestjs.com/) project. One
+command installs the packages, creates the schema, writes `PrismaService` and
+`PrismaModule`, registers the module, and generates the client.
 
-## Installation
+## Quick start
 
-```bash
-npx @averildwi/nest-prisma
-```
-
-### Peer dependencies
-
-This package doesn't bundle its dependencies — the CLI installs them into
-your project automatically based on the database you choose:
-
-```bash
-# installed automatically depending on your choice
-npm install @prisma/client prisma
-npm install @prisma/adapter-pg pg          # if PostgreSQL
-npm install @prisma/adapter-mysql2 mysql2  # if MySQL/MariaDB
-```
-
-> You just need Node.js ≥ 18 and an existing NestJS project (must have a
-> `src/` folder) — no other setup required beforehand.
-
-## Package Contents
-
-| Folder/File | Contents | Purpose |
-|---|---|---|
-| `prisma.service.ts` | `PrismaService` | Extends `PrismaClient`, wires the chosen driver adapter, connects on `onModuleInit` |
-| `prisma.module.ts` | `PrismaModule` | Exposes `PrismaService` for dependency injection across your app |
-| `index.js` | CLI entrypoint | Interactive prompts, installs deps, patches `schema.prisma`, injects files, registers module |
-
-## Quick Start
-
-### 1. Run the scaffolder
+Run it from the root of your NestJS project:
 
 ```bash
 npx @averildwi/nest-prisma
 ```
 
-You'll be prompted for:
+The CLI asks which database you use, shows the full list of planned changes,
+and applies them only after you confirm.
 
-| Prompt | Options |
+```
+  Planned changes
+    $ npm install @prisma/client@7.10.0 @prisma/adapter-pg dotenv
+    $ npm install --save-dev prisma@7.10.0
+    $ npx prisma init --datasource-provider postgresql --output ../src/generated/prisma --no-skills
+    + prisma/schema.prisma (generator set for the driver adapter)
+    + src/prisma/prisma.service.ts
+    + src/prisma/prisma.module.ts
+    ~ src/app.module.ts (add PrismaModule to imports)
+    ~ .gitignore (add /src/generated/prisma)
+    ~ tsconfig.build.json (exclude the Prisma config file)
+    $ npx prisma generate
+
+? Apply these changes? (Y/n)
+```
+
+## Options
+
+| Option | Description |
 |---|---|
-| Prisma ORM version | Stable (7.8.0) — Production Ready with Driver Adapter |
-| Database provider | PostgreSQL / MySQL, Percona, MariaDB |
-| Auto-run `prisma generate`? | Yes / No |
+| `--db <name>` | `postgres` or `mysql` (aliases: `pg`, `postgresql`, `mariadb`) |
+| `--prisma <ver>` | Prisma version to install (default: latest supported) |
+| `--pm <name>` | `npm`, `pnpm`, `yarn` or `bun` (default: auto-detect) |
+| `--no-generate` | Skip `prisma generate` |
+| `--no-install` | Only write files, don't install packages |
+| `-y, --yes` | Skip prompts and use defaults |
+| `--dry-run` | Show the plan without changing anything |
+| `--no-color` | Disable colours (`NO_COLOR` is respected too) |
+| `-v, --version` / `-h, --help` | Version / help |
 
-### 2. Fill in your `.env`
+Non-interactive use (CI, scripts):
 
 ```bash
-DATABASE_URL="postgresql://user:password@localhost:5432/mydb?schema=public"
+npx @averildwi/nest-prisma --db postgres --yes
 ```
 
-### 3. Use in a service
+Without a TTY the CLI never waits for input. If `--db` is missing it exits with
+code 2 and tells you what to pass.
+
+The package manager is picked from `--pm`, then the lockfile, then the command
+that launched the CLI (for example `pnpm dlx`), then npm.
+
+## Supported databases
+
+| Database | Adapter | Class |
+|---|---|---|
+| PostgreSQL | `@prisma/adapter-pg` | `PrismaPg` |
+| MySQL / MariaDB / Percona | `@prisma/adapter-mariadb` | `PrismaMariaDb` |
+
+Each adapter brings its own database driver, so `pg` or `mysql2` are not
+installed separately.
+
+## What gets generated
 
 ```typescript
-// src/users/users.service.ts
-import { Injectable } from '@nestjs/common';
-// Generated automatically in src/prisma
-import { PrismaService } from '../prisma/prisma.service';
+// src/prisma/prisma.service.ts
+import 'dotenv/config';
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { PrismaClient } from '../generated/prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 
+@Injectable()
+export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+  constructor() {
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+      throw new Error('DATABASE_URL is not set. Add it to your .env file before starting the app.');
+    }
+    super({ adapter: new PrismaPg(connectionString) });
+  }
+
+  async onModuleInit() { await this.$connect(); }
+  async onModuleDestroy() { await this.$disconnect(); }
+}
+```
+
+`PrismaModule` is `@Global()` and is added to the `imports` of `AppModule`, so
+`PrismaService` can be injected anywhere:
+
+```typescript
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
@@ -80,79 +111,51 @@ export class UsersService {
 }
 ```
 
-`PrismaModule` is already auto-registered into `src/app.module.ts`, so
-`PrismaService` is injectable anywhere without extra wiring.
+## After setup
 
-## What Gets Generated
+1. Set `DATABASE_URL` in `.env`.
+2. Add models to `prisma/schema.prisma` and run `npx prisma migrate dev --name init`.
+3. Start the app with `npm run start:dev`.
 
-```typescript
-// src/prisma/prisma.service.ts
-@Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit {
-  constructor() {
-    const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
-    super({ adapter });
-  }
+## Behaviour notes
 
-  async onModuleInit() {
-    await this.$connect();
-  }
+- **Safe to re-run.** Each step checks the project first and skips work that is
+  already done. Running the CLI on a configured project prints
+  "Nothing to do".
+- **Fails with a clear report.** If a step fails, the CLI lists the steps that
+  finished and the files that changed, so you know the state of the project.
+  Fix the problem and run the command again.
+- **Checks the project first.** It refuses to run outside a NestJS project
+  (`@nestjs/core` must be in `package.json`), on an unsupported Node version, or
+  in an ESM (`"type": "module"`) project.
+- **The client lives in `src/generated/prisma`.** Generating it inside `src/`
+  keeps Nest's build output at `dist/main.js`. The folder is added to
+  `.gitignore`.
+- **The Prisma config file is excluded from the build.** `prisma init` creates a
+  `.ts` config at the project root. The CLI adds it to the `exclude` list in
+  `tsconfig.build.json` so `npm run start:prod` keeps working.
+- **Prisma 8 is not supported yet.** Prisma 8 replaces `@prisma/client` with new
+  packages and a different API. It will be added once it has a stable release.
 
-  async onModuleDestroy() {
-    await this.$disconnect();
-  }
-}
+## Development
+
+```bash
+npm install
+npm test        # unit tests (node:test, no extra dependencies)
+npm link        # makes the `nest-prisma` command point at this checkout
 ```
 
-```typescript
-// Automatically added to src/app.module.ts
-@Module({
-  imports: [
-    PrismaModule,
-    // ...your other modules
-  ],
-})
-export class AppModule {}
+To test end to end, create a throwaway project and run the CLI inside it:
+
+```bash
+nest new demo --package-manager npm --skip-git
+cd demo
+nest-prisma --db postgres --dry-run   # check the plan
+nest-prisma --db postgres --yes       # apply it
+npm run build                         # must produce dist/main.js
+nest-prisma --db postgres --yes       # must print "Nothing to do"
 ```
-
-## Scaffold Flow
-
-```
-npx @averildwi/nest-prisma
-   │
-   ▼
-[1/5] Install @prisma/client + prisma + matching driver adapter
-   │
-   ▼
-[2/5] Run "prisma init" → patch schema.prisma for Driver Adapter
-   │
-   ▼
-[3/5] Generate src/prisma/prisma.service.ts + prisma.module.ts
-   │
-   ▼
-[4/5] Register PrismaModule into src/app.module.ts
-   │
-   ▼
-[5/5] (optional) Run "prisma generate"
-   │
-   ▼
-Done — inject PrismaService anywhere via DI
-```
-
-## Important Notes
-
-- **Idempotent by design.** If `prisma/`, `src/prisma/*`, or `PrismaModule`
-  already exist, the related step is skipped with a warning instead of
-  overwriting your files.
-- **`schema.prisma` patching** uses a whitespace-tolerant regex. If it can't
-  find the expected pattern (e.g. you're on a very different Prisma
-  version), it leaves the file untouched and warns you to check manually.
-- **`app.module.ts` auto-registration** expects a standard `imports: [...]`
-  array. If your module structure is nonstandard, the CLI prints manual
-  instructions instead of guessing.
-- Currently only supports **PostgreSQL** and **MySQL/MariaDB** as providers.
-- Not yet tested with `pnpm`/`yarn` — NPM is assumed.
 
 ## License
 
-MIT License
+MIT

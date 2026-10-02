@@ -1,7 +1,7 @@
 {
   "name": "@averildwi/nest-prisma",
   "version": "1.0.7",
-  "description": "An interactive CLI generator to scaffold Prisma ORM with flexible version handling (stable vs latest) for NestJS projects.",
+  "description": "Interactive CLI that sets up Prisma ORM 7 with a driver adapter (PostgreSQL or MySQL/MariaDB) in an existing NestJS project.",
   "main": "bin/generate-interactive.js",
   "bin": {
     "nest-prisma": "./bin/generate-interactive.js"
@@ -12,11 +12,31 @@
     "templates"
   ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test test/unit.test.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "nestjs",
+    "prisma",
+    "cli",
+    "scaffold",
+    "postgresql",
+    "mysql",
+    "mariadb",
+    "driver-adapter"
+  ],
+  "author": "averildwi",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/averildwi/nest-prisma.git"
+  },
+  "bugs": {
+    "url": "https://github.com/averildwi/nest-prisma/issues"
+  },
+  "homepage": "https://github.com/averildwi/nest-prisma#readme",
+  "engines": {
+    "node": "^20.19 || ^22.12 || >=24.0"
+  },
   "type": "commonjs",
   "dependencies": {
     "fs-extra": "^11.3.6",

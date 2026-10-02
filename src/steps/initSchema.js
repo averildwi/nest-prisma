@@ -1,64 +1,79 @@
-const { execSync } = require('child_process');
-const path = require('path');
 const fsHelpers = require('../utils/fsHelpers');
-const { log, fail } = require('../utils/logger');
+const ui = require('../ui/output');
+const { rel, displayExec, runPrisma } = require('./helpers');
 
-module.exports = async function initSchema(context) {
-    const { schemaPath, isRustFree, answers } = context;
-    const dbChoice = answers.database;
-    const prismaDir = path.dirname(schemaPath);
+// The client is generated INSIDE src/ on purpose. If it lived at the project
+// root, TypeScript would widen rootDir and Nest would emit dist/src/main.js
+// instead of dist/main.js, which breaks `npm run start:prod`.
+const CLIENT_OUTPUT = '../src/generated/prisma';
 
-    try {
-        log('cyan', '⚙️ [2/5] Running native Prisma initialization...');
+const GENERATOR_BLOCK = [
+    'generator client {',
+    '  provider     = "prisma-client"',
+    `  output       = "${CLIENT_OUTPUT}"`,
+    '  moduleFormat = "cjs"',
+    '}',
+].join('\n');
 
-        if (!(await fsHelpers.exists(prismaDir))) {
-            const providerFlag = dbChoice === 'postgres' ? 'postgresql' : 'mysql';
-            execSync(`npx prisma init --datasource-provider ${providerFlag}`, { stdio: 'inherit' });
+function initArgs(ctx) {
+    return [
+        'init',
+        '--datasource-provider',
+        ctx.database.datasourceProvider,
+        '--output',
+        CLIENT_OUTPUT,
+        // Don't drop .agents/.claude/.windsurf skill folders into the project.
+        '--no-skills',
+    ];
+}
 
-            if (await fsHelpers.exists(schemaPath)) {
-                let schemaContent = await fsHelpers.readFile(schemaPath);
-                const original = schemaContent;
+/** Forces the generator block into the shape the generated PrismaService expects. */
+function patchSchema(source) {
+    let patched = source.replace(/generator\s+client\s*\{[^}]*\}/, GENERATOR_BLOCK);
+    // Older templates put the URL in the schema; Prisma 7 reads it from the config file.
+    patched = patched.replace(
+        /^\s*url\s*=\s*env\("DATABASE_URL"\)\s*$/m,
+        '  // The connection URL is read from DATABASE_URL by the driver adapter.',
+    );
+    return patched;
+}
 
-                if (isRustFree) {
-                    schemaContent = schemaContent.replace(
-                        /generator\s+client\s*\{[^}]*\}/,
-                        `generator client {\n  provider     = "prisma-client"\n  output       = "../generated/prisma"\n  moduleFormat = "cjs"\n}`,
-                    );
+module.exports = {
+    id: 'schema',
+    title: 'Initialise the Prisma schema',
 
-                    schemaContent = schemaContent.replace(
-                        /url\s*=\s*env\("DATABASE_URL"\)/g,
-                        '// URL connection is managed natively via Driver Adapter in prisma.service.ts',
-                    );
-                } else {
-                    schemaContent = schemaContent.replace(
-                        /provider\s*=\s*"prisma-client"/,
-                        'provider = "prisma-client-js"',
-                    );
-
-                    schemaContent = schemaContent.replace(
-                        /output\s*=\s*".*?"/g,
-                        '// Output is set to default node_modules location for NestJS global access',
-                    );
-
-                    schemaContent = schemaContent.replace(
-                        /url\s*=\s*env\("DATABASE_URL"\)/g,
-                        '// URL connection is managed natively via Driver Adapter in prisma.service.ts',
-                    );
-                }
-
-                if (schemaContent === original) {
-                    log('yellow', '⚠️ [Warning] schema.prisma pattern not found — file left unmodified. Please review it manually.');
-                } else {
-                    await fsHelpers.writeFile(schemaPath, schemaContent);
-                    log('green', `✅ [Success] schema.prisma automatically optimized for ${isRustFree ? 'Prisma 7 rust-free' : 'Prisma 7 legacy'} architecture!`);
-                }
-            } else {
-                log('yellow', '⚠️ [Warning] schema.prisma not found after "prisma init" — skipping schema patch.');
-            }
-        } else {
-            log('yellow', '⚠️ [Skip] "prisma" folder already exists — skipping "prisma init" to avoid overwriting your schema.');
+    async plan(ctx) {
+        if (await fsHelpers.exists(ctx.paths.prismaDir)) {
+            return {
+                entries: [{ kind: 'skip', label: 'prisma init', reason: 'prisma/ already exists, schema left untouched' }],
+            };
         }
-    } catch (err) {
-        fail('Prisma initialization failed.', err);
-    }
+        return {
+            entries: [
+                { kind: 'run', label: displayExec(ctx, 'prisma', initArgs(ctx)) },
+                { kind: 'create', label: `${rel(ctx, ctx.paths.schema)} (generator set for the driver adapter)` },
+            ],
+        };
+    },
+
+    async run(ctx) {
+        await runPrisma(ctx, initArgs(ctx));
+
+        if (!(await fsHelpers.exists(ctx.paths.schema))) {
+            ui.warn('"prisma init" did not create prisma/schema.prisma. Check the output above.');
+            return { status: 'warning' };
+        }
+
+        const original = await fsHelpers.readFile(ctx.paths.schema);
+        const patched = patchSchema(original);
+        if (patched !== original) {
+            await fsHelpers.writeFile(ctx.paths.schema, patched);
+        }
+
+        ui.success(`Created ${rel(ctx, ctx.paths.schema)} for ${ctx.database.label}`);
+        return { files: [{ kind: 'create', path: rel(ctx, ctx.paths.schema) }] };
+    },
 };
+
+module.exports.patchSchema = patchSchema;
+module.exports.CLIENT_OUTPUT = CLIENT_OUTPUT;
