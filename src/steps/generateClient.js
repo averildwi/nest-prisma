@@ -15,7 +15,7 @@ module.exports = {
         // Skip on re-runs once the client exists, so a fully configured project
         // reports "nothing to do". After schema changes the user regenerates
         // as part of their normal workflow (migrate dev does it automatically).
-        const clientEntry = path.join(ctx.projectRoot, 'src', 'generated', 'prisma', 'client.ts');
+        const clientEntry = path.join(ctx.clientDir, 'client.ts');
         if (await fsHelpers.exists(clientEntry)) {
             return { entries: [{ kind: 'skip', label: 'prisma generate', reason: 'client already generated' }] };
         }
@@ -33,7 +33,7 @@ module.exports = {
             ctx.generateFailed = true;
             return { status: 'warning' };
         }
-        ui.success('Generated Prisma Client in src/generated/prisma');
+        ui.success(`Generated Prisma Client in ${ctx.clientOutRel.replace('../', '')}`);
         return {};
     },
 };

@@ -30,6 +30,7 @@ async function resolveAnswers(options, { interactive }) {
     const answers = {
         prismaVersion: options.prismaVersion,
         database: options.database,
+        clientOutput: options.clientOutput,
         runGenerate: options.runGenerate,
     };
 
@@ -48,6 +49,7 @@ async function resolveAnswers(options, { interactive }) {
         return {
             prismaVersion: answers.prismaVersion ?? getDefaultVersion(),
             database: answers.database,
+            clientOutput: answers.clientOutput ?? 'src',
             runGenerate: answers.runGenerate ?? true,
         };
     }
@@ -77,6 +79,19 @@ async function resolveAnswers(options, { interactive }) {
         });
     }
 
+    if (answers.clientOutput === undefined) {
+        questions.push({
+            type: 'list',
+            name: 'clientOutput',
+            message: 'Where should the generated Prisma Client live?',
+            default: 'src',
+            choices: [
+                { name: '📁  Inside src (src/generated/prisma) — recommended, no build config changes', value: 'src' },
+                { name: '📁  Project root (generated/prisma) — start:prod path is adjusted automatically', value: 'root' },
+            ],
+        });
+    }
+
     if (answers.runGenerate === undefined) {
         questions.push({
             type: 'confirm',
@@ -91,6 +106,7 @@ async function resolveAnswers(options, { interactive }) {
     return {
         prismaVersion: answers.prismaVersion ?? prompted.prismaVersion ?? getDefaultVersion(),
         database: answers.database ?? prompted.database,
+        clientOutput: answers.clientOutput ?? prompted.clientOutput ?? 'src',
         runGenerate: answers.runGenerate ?? prompted.runGenerate ?? true,
     };
 }

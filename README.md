@@ -44,12 +44,32 @@ and applies them only after you confirm.
 | `--db <name>` | `postgres` or `mysql` (aliases: `pg`, `postgresql`, `mariadb`) |
 | `--prisma <ver>` | Prisma version to install (default: latest supported) |
 | `--pm <name>` | `npm`, `pnpm`, `yarn` or `bun` (default: auto-detect) |
+| `--output <loc>` | Where the generated client lives: `src` (default) or `root` |
 | `--no-generate` | Skip `prisma generate` |
 | `--no-install` | Only write files, don't install packages |
 | `-y, --yes` | Skip prompts and use defaults |
 | `--dry-run` | Show the plan without changing anything |
 | `--no-color` | Disable colours (`NO_COLOR` is respected too) |
 | `-v, --version` / `-h, --help` | Version / help |
+
+### Client output location
+
+By default the generated Prisma Client lives inside `src/generated/prisma`.
+This keeps the TypeScript `rootDir` narrow, so `nest build` emits
+`dist/main.js` and `npm run start:prod` works untouched.
+
+Choosing `--output root` places it in `generated/prisma` instead. The client
+then sits outside `src/`, TypeScript widens its `rootDir`, and the build emits
+`dist/src/main.js` — so the CLI automatically:
+
+- sets `start:prod` to `node dist/src/main`
+- sets `compilerOptions.entryFile` to `src/main` in `nest-cli.json`
+  (this is what `nest start` / `nest build` run)
+
+Switching the location later is safe: re-run the CLI with the other
+`--output` value and it re-aligns the schema, the `PrismaService` import, the
+`.gitignore` entries and the prod entry points, warning you about a stale
+generated client left behind.
 
 Non-interactive use (CI, scripts):
 

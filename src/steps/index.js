@@ -13,5 +13,6 @@ module.exports = [
     require('./registerAppModule'),
     require('./updateGitignore'),
     require('./configureBuild'),
+    require('./fixProdEntry'),
     require('./generateClient'),
 ];

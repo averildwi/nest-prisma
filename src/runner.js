@@ -17,11 +17,26 @@ function buildContext({ projectRoot, pkgJson, answers, packageManager, install }
         database: answers.database,
     });
 
+    // Where the generated Prisma Client lives. "src" keeps the tsc rootDir
+    // narrow so the build emits dist/main.js; "root" widens it and makes the
+    // build emit dist/src/main.js, which the prod-entry step compensates for.
+    const clientOutput = answers.clientOutput === 'root' ? 'root' : 'src';
+    const clientOutRel = clientOutput === 'root' ? '../generated/prisma' : '../src/generated/prisma';
+    const clientDir = path.join(
+        projectRoot,
+        clientOutput === 'root' ? 'generated/prisma' : 'src/generated/prisma',
+    );
+
     return {
         projectRoot,
         pkgJson,
         database,
         prismaVersion: answers.prismaVersion,
+        clientOutput,
+        clientOutRel,
+        clientDir,
+        serviceImport:
+            clientOutput === 'root' ? '../../generated/prisma/client' : '../generated/prisma/client',
         runGenerate: answers.runGenerate,
         install,
         pm: getPackageManager(packageManager.name),
@@ -37,6 +52,8 @@ function buildContext({ projectRoot, pkgJson, answers, packageManager, install }
             appModule: path.join(projectRoot, 'src', 'app.module.ts'),
             gitignore: path.join(projectRoot, '.gitignore'),
             tsconfigBuild: path.join(projectRoot, 'tsconfig.build.json'),
+            nestCliJson: path.join(projectRoot, 'nest-cli.json'),
+            pkgJsonPath: path.join(projectRoot, 'package.json'),
             env: path.join(projectRoot, '.env'),
         },
     };
@@ -67,6 +84,7 @@ function printPlan(ctx, plan, { dryRun }) {
         ['Project', path.basename(ctx.projectRoot)],
         ['Database', `${ctx.database.label} ${c.gray(`(${ctx.database.adapterPackage})`)}`],
         ['Prisma', ctx.prismaVersion],
+        ['Client output', ctx.clientOutput === 'root' ? 'generated/prisma (project root)' : 'src/generated/prisma'],
         ['Package manager', `${ctx.pm.name} ${c.gray(`(${ctx.pmSource})`)}`],
     ]);
 

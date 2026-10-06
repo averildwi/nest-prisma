@@ -38,6 +38,13 @@ test('argv: invalid values fail with exit code 2', () => {
     }
 });
 
+test('argv: --output accepts src/root and rejects anything else', () => {
+    assert.equal(parseCliArgs(['--output', 'root']).clientOutput, 'root');
+    assert.equal(parseCliArgs(['--output', 'SRC']).clientOutput, 'src');
+    assert.equal(parseCliArgs([]).clientOutput, undefined);
+    assert.throws(() => parseCliArgs(['--output', 'docs']), (e) => e.name === 'CliError' && e.exitCode === 2);
+});
+
 test('node range matches Prisma 7 engines', () => {
     const range = '^20.19 || ^22.12 || >=24.0';
     assert.ok(satisfiesNodeRange('v22.17.1', range));
@@ -63,10 +70,16 @@ test('registry: no phantom packages', () => {
 test('service template renders with no placeholders left', () => {
     const tpl = require('fs').readFileSync(require('path').join(__dirname, '../templates/prisma/prisma.service.ts'), 'utf8');
     for (const db of ['postgres', 'mysql']) {
-        const out = renderService(tpl, getDatabase(db));
-        assert.doesNotMatch(out, /__ADAPTER_/);
-        assert.match(out, new RegExp(`new ${getDatabase(db).adapterClass}\\(connectionString\\)`));
-        assert.match(out, /from '\.\.\/generated\/prisma\/client'/);
+        for (const [mode, clientImport] of [
+            ['src', '../generated/prisma/client'],
+            ['root', '../../generated/prisma/client'],
+        ]) {
+            const out = renderService(tpl, getDatabase(db), clientImport);
+            assert.doesNotMatch(out, /__ADAPTER_/);
+            assert.doesNotMatch(out, /__CLIENT_IMPORT__/);
+            assert.match(out, new RegExp(`new ${getDatabase(db).adapterClass}\\(connectionString\\)`));
+            assert.match(out, new RegExp(`from '${clientImport}'`));
+        }
     }
 });
 
@@ -91,10 +104,17 @@ test('app.module: import goes after a license header, not above it', () => {
 });
 
 test('gitignore: replaces the stale prisma init entry and is idempotent-friendly', () => {
-    const out = addEntry('node_modules\n\n/generated/prisma\n');
-    assert.ok(out.includes('/src/generated/prisma'));
-    assert.ok(!out.split('\n').includes('/generated/prisma'));
-    assert.ok(out.endsWith('\n'));
+    // src mode: wants /src/generated/prisma, strips the prisma-init default.
+    const srcOut = addEntry('node_modules\n\n/generated/prisma\n', '/src/generated/prisma', '/generated/prisma');
+    assert.ok(srcOut.includes('/src/generated/prisma'));
+    assert.ok(!srcOut.split('\n').includes('/generated/prisma'));
+    assert.ok(srcOut.endsWith('\n'));
+
+    // root mode: wants /generated/prisma, strips the src entry.
+    const rootOut = addEntry('node_modules\n\n/src/generated/prisma\n', '/generated/prisma', '/src/generated/prisma');
+    assert.ok(rootOut.includes('/generated/prisma'));
+    assert.ok(!rootOut.split('\n').includes('/src/generated/prisma'));
+    assert.ok(rootOut.endsWith('\n'));
 });
 
 test('schema: generator block forced to src/generated output', () => {

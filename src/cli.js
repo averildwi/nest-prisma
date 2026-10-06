@@ -12,6 +12,7 @@ const OPTIONS = {
     db: { type: 'string' },
     prisma: { type: 'string' },
     pm: { type: 'string' },
+    output: { type: 'string' },
     generate: { type: 'boolean' },
     'no-generate': { type: 'boolean' },
     install: { type: 'boolean' },
@@ -61,6 +62,7 @@ function parseCliArgs(argv = process.argv.slice(2)) {
         database: undefined,
         prismaVersion: undefined,
         packageManager: undefined,
+        clientOutput: undefined,
         runGenerate: pickBoolean(v, 'generate'),
         install: pickBoolean(v, 'install'),
         color: pickBoolean(v, 'color'),
@@ -98,6 +100,17 @@ function parseCliArgs(argv = process.argv.slice(2)) {
         options.packageManager = pm;
     }
 
+    if (v.output !== undefined) {
+        const output = v.output.toLowerCase();
+        if (output !== 'src' && output !== 'root') {
+            throw new CliError(`Unknown output location "${v.output}".`, {
+                hints: ['Supported values: src (inside src/generated/prisma) or root (generated/prisma).'],
+                exitCode: 2,
+            });
+        }
+        options.clientOutput = output;
+    }
+
     return options;
 }
 
@@ -114,6 +127,9 @@ function helpText(pkg) {
     --db <name>        Database provider: ${dbs}
     --prisma <ver>     Prisma version to install (default: latest supported)
     --pm <name>        Package manager: npm | pnpm | yarn | bun (default: auto-detect)
+    --output <loc>     Where the generated client lives: src (default) or root
+                       src  -> src/generated/prisma (no build config changes)
+                       root -> generated/prisma (start:prod path is adjusted)
     --no-generate      Skip running "prisma generate" at the end
     --no-install       Skip installing dependencies (only write files)
     -y, --yes          Accept defaults and skip all prompts
@@ -126,6 +142,7 @@ function helpText(pkg) {
     $ npx ${pkg.name}
     $ npx ${pkg.name} --db postgres --yes
     $ npx ${pkg.name} --db mysql --pm pnpm --dry-run
+    $ npx ${pkg.name} --db postgres --output root --yes
 `;
 }
 
