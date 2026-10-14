@@ -49,7 +49,7 @@ async function resolveAnswers(options, { interactive }) {
         return {
             prismaVersion: answers.prismaVersion ?? getDefaultVersion(),
             database: answers.database,
-            clientOutput: answers.clientOutput ?? 'src',
+            clientOutput: answers.clientOutput ?? 'root',
             runGenerate: answers.runGenerate ?? true,
         };
     }
@@ -84,10 +84,10 @@ async function resolveAnswers(options, { interactive }) {
             type: 'list',
             name: 'clientOutput',
             message: 'Where should the generated Prisma Client live?',
-            default: 'src',
+            default: 'root',
             choices: [
-                { name: '📁  Inside src (src/generated/prisma) — recommended, no build config changes', value: 'src' },
-                { name: '📁  Project root (generated/prisma) — start:prod path is adjusted automatically', value: 'root' },
+                { name: 'Project root (generated/prisma), recommended. start:prod path is adjusted automatically', value: 'root' },
+                { name: 'Inside src (src/generated/prisma), no build config changes', value: 'src' },
             ],
         });
     }
@@ -106,7 +106,7 @@ async function resolveAnswers(options, { interactive }) {
     return {
         prismaVersion: answers.prismaVersion ?? prompted.prismaVersion ?? getDefaultVersion(),
         database: answers.database ?? prompted.database,
-        clientOutput: answers.clientOutput ?? prompted.clientOutput ?? 'src',
+        clientOutput: answers.clientOutput ?? prompted.clientOutput ?? 'root',
         runGenerate: answers.runGenerate ?? prompted.runGenerate ?? true,
     };
 }

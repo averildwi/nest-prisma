@@ -25,13 +25,17 @@ and applies them only after you confirm.
   Planned changes
     $ npm install @prisma/client@7.10.0 @prisma/adapter-pg dotenv
     $ npm install --save-dev prisma@7.10.0
-    $ npx prisma init --datasource-provider postgresql --output ../src/generated/prisma --no-skills
+    $ npx prisma init --datasource-provider postgresql --output ../generated/prisma --no-skills
     + prisma/schema.prisma (generator set for the driver adapter)
     + src/prisma/prisma.service.ts
     + src/prisma/prisma.module.ts
     ~ src/app.module.ts (add PrismaModule to imports)
-    ~ .gitignore (add /src/generated/prisma)
+    - .gitignore (already ignores /generated/prisma)
     ~ tsconfig.build.json (exclude the Prisma config file)
+    ~ package.json (start:prod: node dist/main -> node dist/src/main)
+    ~ nest-cli.json (entryFile -> src/main, so "nest start/build" finds dist/src/main.js)
+    ~ package.json (jest) (moduleNameMapper for .js imports)
+    ~ test/jest-e2e.json (moduleNameMapper for .js imports)
     $ npx prisma generate
 
 ? Apply these changes? (Y/n)
@@ -44,7 +48,7 @@ and applies them only after you confirm.
 | `--db <name>` | `postgres` or `mysql` (aliases: `pg`, `postgresql`, `mariadb`) |
 | `--prisma <ver>` | Prisma version to install (default: latest supported) |
 | `--pm <name>` | `npm`, `pnpm`, `yarn` or `bun` (default: auto-detect) |
-| `--output <loc>` | Where the generated client lives: `src` (default) or `root` |
+| `--output <loc>` | Where the generated client lives: `root` (default) or `src` |
 | `--no-generate` | Skip `prisma generate` |
 | `--no-install` | Only write files, don't install packages |
 | `-y, --yes` | Skip prompts and use defaults |
@@ -54,22 +58,38 @@ and applies them only after you confirm.
 
 ### Client output location
 
-By default the generated Prisma Client lives inside `src/generated/prisma`.
-This keeps the TypeScript `rootDir` narrow, so `nest build` emits
-`dist/main.js` and `npm run start:prod` works untouched.
+By default the generated Prisma Client lives in `generated/prisma` at the
+project root, outside `src/`. Import it with a relative path, for example
+`'../../generated/prisma/client'` from `src/<feature>/`.
 
-Choosing `--output root` places it in `generated/prisma` instead. The client
-then sits outside `src/`, TypeScript widens its `rootDir`, and the build emits
-`dist/src/main.js` — so the CLI automatically:
+Because the client sits outside `src/`, TypeScript widens its `rootDir` and
+the build emits `dist/src/main.js`, so the CLI automatically:
 
 - sets `start:prod` to `node dist/src/main`
 - sets `compilerOptions.entryFile` to `src/main` in `nest-cli.json`
   (this is what `nest start` / `nest build` run)
 
+`--output src` places the client in `src/generated/prisma` instead and keeps
+the build at `dist/main.js`, with no build config changes.
+
 Switching the location later is safe: re-run the CLI with the other
 `--output` value and it re-aligns the schema, the `PrismaService` import, the
 `.gitignore` entries and the prod entry points, warning you about a stale
 generated client left behind.
+
+### Jest
+
+The `prisma-client` generator writes relative imports with a `.js` suffix
+(`./internal/class.js`). Jest does not resolve those to `.ts` files on its own,
+so the first spec that imports the client would fail with
+`Cannot find module './internal/class.js'`. The CLI adds this mapping to the
+`jest` block in `package.json` and to `test/jest-e2e.json`:
+
+```json
+"moduleNameMapper": { "^(\\.{1,2}/.*)\\.js$": "$1" }
+```
+
+With a `jest.config.ts`/`.js` it prints the line to add instead.
 
 Non-interactive use (CI, scripts):
 
@@ -99,7 +119,7 @@ installed separately.
 // src/prisma/prisma.service.ts
 import 'dotenv/config';
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { PrismaClient } from '../generated/prisma/client';
+import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
 @Injectable()
@@ -118,7 +138,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 ```
 
 `PrismaModule` is `@Global()` and is added to the `imports` of `AppModule`, so
-`PrismaService` can be injected anywhere:
+`PrismaService` can be injected anywhere. Select the columns you need
+explicitly, so sensitive fields such as `passwordHash` never leak:
 
 ```typescript
 @Injectable()
@@ -126,7 +147,10 @@ export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   findAll() {
-    return this.prisma.user.findMany();
+    return this.prisma.user.findMany({
+      select: { id: true, email: true, name: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 }
 ```
@@ -136,6 +160,15 @@ export class UsersService {
 1. Set `DATABASE_URL` in `.env`.
 2. Add models to `prisma/schema.prisma` and run `npx prisma migrate dev --name init`.
 3. Start the app with `npm run start:dev`.
+
+Recommended order on a new project (Nest 11 is the tested target):
+
+```bash
+npx @nestjs/cli@11 new my-app --strict
+cd my-app
+npx @averildwi/nest-prisma --db postgres
+npx @averildwi/nest-common
+```
 
 ## Behaviour notes
 
@@ -148,8 +181,8 @@ export class UsersService {
 - **Checks the project first.** It refuses to run outside a NestJS project
   (`@nestjs/core` must be in `package.json`), on an unsupported Node version, or
   in an ESM (`"type": "module"`) project.
-- **The client lives in `src/generated/prisma`.** Generating it inside `src/`
-  keeps Nest's build output at `dist/main.js`. The folder is added to
+- **The client lives in `generated/prisma`** at the project root by default
+  (`--output src` for `src/generated/prisma`). The folder is added to
   `.gitignore`.
 - **The Prisma config file is excluded from the build.** `prisma init` creates a
   `.ts` config at the project root. The CLI adds it to the `exclude` list in
@@ -168,11 +201,12 @@ npm link        # makes the `nest-prisma` command point at this checkout
 To test end to end, create a throwaway project and run the CLI inside it:
 
 ```bash
-nest new demo --package-manager npm --skip-git
+npx @nestjs/cli@11 new demo --package-manager npm --skip-git
 cd demo
 nest-prisma --db postgres --dry-run   # check the plan
 nest-prisma --db postgres --yes       # apply it
-npm run build                         # must produce dist/main.js
+npm run build                         # must produce dist/src/main.js
+npm test                              # Jest still passes
 nest-prisma --db postgres --yes       # must print "Nothing to do"
 ```
 

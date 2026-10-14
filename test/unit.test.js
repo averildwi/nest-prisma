@@ -117,11 +117,24 @@ test('gitignore: replaces the stale prisma init entry and is idempotent-friendly
     assert.ok(rootOut.endsWith('\n'));
 });
 
-test('schema: generator block forced to src/generated output', () => {
-    const src = 'generator client {\n  provider = "prisma-client"\n  output   = "../generated/prisma"\n}\n\ndatasource db {\n  provider = "postgresql"\n}\n';
+test('schema: generator block defaults to the root output, src on request', () => {
+    const src = 'generator client {\n  provider = "prisma-client"\n  output   = "../src/generated/prisma"\n}\n\ndatasource db {\n  provider = "postgresql"\n}\n';
     const out = patchSchema(src);
-    assert.match(out, /output\s+= "\.\.\/src\/generated\/prisma"/);
+    assert.match(out, /output\s+= "\.\.\/generated\/prisma"/);
     assert.match(out, /moduleFormat = "cjs"/);
+    assert.match(patchSchema(src, '../src/generated/prisma'), /output\s+= "\.\.\/src\/generated\/prisma"/);
+});
+
+test('runner: --output defaults to root (I16)', () => {
+    const { buildContext } = require('../src/runner');
+    const pm = { name: 'npm', source: 'default' };
+    const base = { prismaVersion: '7.10.0', database: 'postgres', runGenerate: false };
+    const root = buildContext({ projectRoot: '/p', pkgJson: {}, answers: base, packageManager: pm, install: false });
+    assert.equal(root.clientOutput, 'root');
+    assert.equal(root.clientOutRel, '../generated/prisma');
+    assert.equal(root.serviceImport, '../../generated/prisma/client');
+    const src = buildContext({ projectRoot: '/p', pkgJson: {}, answers: { ...base, clientOutput: 'src' }, packageManager: pm, install: false });
+    assert.equal(src.clientOutput, 'src');
 });
 
 test('installDeps: detects already-satisfied specs per dependency field', () => {
@@ -132,6 +145,19 @@ test('installDeps: detects already-satisfied specs per dependency field', () => 
     assert.ok(!isSatisfied('@prisma/client@7.9.0', pkg, 'dependencies'));
     // dotenv only as a devDependency must still be installed as a runtime dependency.
     assert.ok(!isSatisfied('dotenv', pkg, 'dependencies'));
+});
+
+test('jest: adds the .js moduleNameMapper once and keeps existing entries', () => {
+    const { withMapper, JS_SUFFIX_KEY } = require('../src/steps/configureJest');
+    const out = withMapper({ rootDir: 'src', moduleNameMapper: { '^@app/(.*)$': '<rootDir>/$1' } });
+    assert.equal(out.moduleNameMapper[JS_SUFFIX_KEY], '$1');
+    assert.equal(out.moduleNameMapper['^@app/(.*)$'], '<rootDir>/$1');
+    assert.equal(out.rootDir, 'src');
+    assert.equal(withMapper(out), null);
+    // The regex must strip .js only from relative specifiers.
+    const re = new RegExp(JS_SUFFIX_KEY);
+    assert.equal('./internal/class.js'.replace(re, '$1'), './internal/class');
+    assert.ok(!re.test('lodash.js'));
 });
 
 test('package manager detection priority', () => {

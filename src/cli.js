@@ -104,7 +104,7 @@ function parseCliArgs(argv = process.argv.slice(2)) {
         const output = v.output.toLowerCase();
         if (output !== 'src' && output !== 'root') {
             throw new CliError(`Unknown output location "${v.output}".`, {
-                hints: ['Supported values: src (inside src/generated/prisma) or root (generated/prisma).'],
+                hints: ['Supported values: root (generated/prisma, default) or src (src/generated/prisma).'],
                 exitCode: 2,
             });
         }
@@ -127,9 +127,9 @@ function helpText(pkg) {
     --db <name>        Database provider: ${dbs}
     --prisma <ver>     Prisma version to install (default: latest supported)
     --pm <name>        Package manager: npm | pnpm | yarn | bun (default: auto-detect)
-    --output <loc>     Where the generated client lives: src (default) or root
-                       src  -> src/generated/prisma (no build config changes)
+    --output <loc>     Where the generated client lives: root (default) or src
                        root -> generated/prisma (start:prod path is adjusted)
+                       src  -> src/generated/prisma (no build config changes)
     --no-generate      Skip running "prisma generate" at the end
     --no-install       Skip installing dependencies (only write files)
     -y, --yes          Accept defaults and skip all prompts
@@ -142,7 +142,7 @@ function helpText(pkg) {
     $ npx ${pkg.name}
     $ npx ${pkg.name} --db postgres --yes
     $ npx ${pkg.name} --db mysql --pm pnpm --dry-run
-    $ npx ${pkg.name} --db postgres --output root --yes
+    $ npx ${pkg.name} --db postgres --output src --yes
 `;
 }
 

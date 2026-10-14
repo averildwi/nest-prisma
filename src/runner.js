@@ -17,10 +17,10 @@ function buildContext({ projectRoot, pkgJson, answers, packageManager, install }
         database: answers.database,
     });
 
-    // Where the generated Prisma Client lives. "src" keeps the tsc rootDir
-    // narrow so the build emits dist/main.js; "root" widens it and makes the
-    // build emit dist/src/main.js, which the prod-entry step compensates for.
-    const clientOutput = answers.clientOutput === 'root' ? 'root' : 'src';
+    // Where the generated Prisma Client lives. "root" (the standard) keeps it
+    // out of src/; tsc then widens rootDir and emits dist/src/main.js, which
+    // the prod-entry step compensates for. "src" keeps dist/main.js.
+    const clientOutput = answers.clientOutput === 'src' ? 'src' : 'root';
     const clientOutRel = clientOutput === 'root' ? '../generated/prisma' : '../src/generated/prisma';
     const clientDir = path.join(
         projectRoot,
