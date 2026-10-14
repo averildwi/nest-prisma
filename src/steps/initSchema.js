@@ -4,12 +4,11 @@ const fsHelpers = require('../utils/fsHelpers');
 const ui = require('../ui/output');
 const { rel, displayExec, runPrisma } = require('./helpers');
 
-// Default: the client is generated INSIDE src/ on purpose. If it lived at the
-// project root, TypeScript would widen rootDir and Nest would emit
-// dist/src/main.js instead of dist/main.js, which breaks `npm run start:prod`.
-// Users can opt into the root layout with --output root; the prod-entry step
-// then compensates by repointing start:prod and nest-cli entryFile.
-const CLIENT_OUTPUT = '../src/generated/prisma';
+// Default: the client is generated at the project root (decision I16), out of
+// src/. TypeScript then widens rootDir and Nest emits dist/src/main.js; the
+// prod-entry step repoints start:prod and the nest-cli entryFile. --output src
+// keeps the client inside src/ and the build at dist/main.js.
+const CLIENT_OUTPUT = '../generated/prisma';
 
 function generatorBlock(clientOutRel) {
     return [
