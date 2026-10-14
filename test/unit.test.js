@@ -147,6 +147,19 @@ test('installDeps: detects already-satisfied specs per dependency field', () => 
     assert.ok(!isSatisfied('dotenv', pkg, 'dependencies'));
 });
 
+test('jest: adds the .js moduleNameMapper once and keeps existing entries', () => {
+    const { withMapper, JS_SUFFIX_KEY } = require('../src/steps/configureJest');
+    const out = withMapper({ rootDir: 'src', moduleNameMapper: { '^@app/(.*)$': '<rootDir>/$1' } });
+    assert.equal(out.moduleNameMapper[JS_SUFFIX_KEY], '$1');
+    assert.equal(out.moduleNameMapper['^@app/(.*)$'], '<rootDir>/$1');
+    assert.equal(out.rootDir, 'src');
+    assert.equal(withMapper(out), null);
+    // The regex must strip .js only from relative specifiers.
+    const re = new RegExp(JS_SUFFIX_KEY);
+    assert.equal('./internal/class.js'.replace(re, '$1'), './internal/class');
+    assert.ok(!re.test('lodash.js'));
+});
+
 test('package manager detection priority', () => {
     const fs = require('fs');
     const path = require('path');

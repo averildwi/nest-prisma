@@ -14,5 +14,6 @@ module.exports = [
     require('./updateGitignore'),
     require('./configureBuild'),
     require('./fixProdEntry'),
+    require('./configureJest'),
     require('./generateClient'),
 ];
