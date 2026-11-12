@@ -48,6 +48,8 @@ and applies them only after you confirm.
 | `--db <name>` | `postgres` or `mysql` (aliases: `pg`, `postgresql`, `mariadb`) |
 | `--prisma <ver>` | Prisma version to install (default: latest supported) |
 | `--pm <name>` | `npm`, `pnpm`, `yarn` or `bun` (default: auto-detect) |
+| `--cwd <path>` | Run against this app directory (default: current directory) |
+| `--app <name>` | Pick a workspace package by name or relative path |
 | `--output <loc>` | Where the generated client lives: `root` (default) or `src` |
 | `--no-generate` | Skip `prisma generate` |
 | `--no-install` | Only write files, don't install packages |
@@ -55,6 +57,36 @@ and applies them only after you confirm.
 | `--dry-run` | Show the plan without changing anything |
 | `--no-color` | Disable colours (`NO_COLOR` is respected too) |
 | `-v, --version` / `-h, --help` | Version / help |
+
+### Monorepo / Turborepo
+
+The CLI can be started from the workspace root or from the app directory. It
+detects the workspace root (`turbo.json`, `pnpm-workspace.yaml`, or a root
+`package.json` with `workspaces`), finds the NestJS package, and reads the
+package manager from the root `packageManager` field or lockfile.
+
+Installs run from the workspace root and target the member by name
+(`npm --workspace`, `pnpm --filter`, `yarn workspace`); Bun runs the plain
+command inside the app. The Prisma CLI is resolved by walking up from the app,
+so a dependency hoisted to the root still works. Turbo projects get a short
+checklist in the summary; `turbo.json` is never edited.
+
+```bash
+# From the workspace root: the only NestJS app is selected
+npx @averildwi/nest-prisma --db postgres
+
+# Several NestJS apps: pick one explicitly (also required in CI)
+npx @averildwi/nest-prisma --app @repo/api --db postgres
+
+# Or point at the app directory from anywhere
+npx @averildwi/nest-prisma --cwd apps/api --db postgres
+```
+
+Without a TTY the CLI never prompts: an ambiguous workspace exits with code 2
+and asks for `--app`/`--cwd`. See [`docs/monorepo.md`](docs/monorepo.md) for
+the full resolution rules and current limitations, [`docs/release.md`](docs/release.md)
+for the release checklist, and [`CHANGELOG.md`](CHANGELOG.md) for notable
+changes.
 
 ### Client output location
 

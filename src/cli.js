@@ -12,6 +12,8 @@ const OPTIONS = {
     db: { type: 'string' },
     prisma: { type: 'string' },
     pm: { type: 'string' },
+    cwd: { type: 'string' },
+    app: { type: 'string' },
     output: { type: 'string' },
     generate: { type: 'boolean' },
     'no-generate': { type: 'boolean' },
@@ -62,6 +64,8 @@ function parseCliArgs(argv = process.argv.slice(2)) {
         database: undefined,
         prismaVersion: undefined,
         packageManager: undefined,
+        cwd: v.cwd,
+        app: v.app,
         clientOutput: undefined,
         runGenerate: pickBoolean(v, 'generate'),
         install: pickBoolean(v, 'install'),
@@ -127,6 +131,8 @@ function helpText(pkg) {
     --db <name>        Database provider: ${dbs}
     --prisma <ver>     Prisma version to install (default: latest supported)
     --pm <name>        Package manager: npm | pnpm | yarn | bun (default: auto-detect)
+    --cwd <path>       Run against this app directory (default: current directory)
+    --app <name>       Pick a workspace package by name or relative path
     --output <loc>     Where the generated client lives: root (default) or src
                        root -> generated/prisma (start:prod path is adjusted)
                        src  -> src/generated/prisma (no build config changes)
@@ -143,6 +149,7 @@ function helpText(pkg) {
     $ npx ${pkg.name} --db postgres --yes
     $ npx ${pkg.name} --db mysql --pm pnpm --dry-run
     $ npx ${pkg.name} --db postgres --output src --yes
+    $ npx ${pkg.name} --app @repo/api --db postgres
 `;
 }
 
