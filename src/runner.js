@@ -10,12 +10,17 @@ const steps = require('./steps');
 
 const TEMPLATES_DIR = path.join(__dirname, '..', 'templates', 'prisma');
 
-function buildContext({ projectRoot, pkgJson, answers, packageManager, install }) {
+function buildContext({ projectRoot, pkgJson, answers, packageManager, install, workspace }) {
     const database = getDatabase(answers.database);
     const { dependencies, devDependencies } = resolveDependencies({
         version: answers.prismaVersion,
         database: answers.database,
     });
+
+    const workspaceRoot = workspace && workspace.workspaceRoot ? workspace.workspaceRoot : null;
+    const isWorkspaceMember = Boolean(
+        workspace && workspace.isWorkspace && workspace.isMember && workspace.appDir,
+    );
 
     // Where the generated Prisma Client lives. "root" (the standard) keeps it
     // out of src/; tsc then widens rootDir and emits dist/src/main.js, which
@@ -41,6 +46,11 @@ function buildContext({ projectRoot, pkgJson, answers, packageManager, install }
         install,
         pm: getPackageManager(packageManager.name),
         pmSource: packageManager.source,
+        workspaceRoot,
+        packageName: workspace ? workspace.packageName : null,
+        appRel: workspace ? workspace.appRel : null,
+        isWorkspaceMember,
+        turbo: Boolean(workspace && workspace.turbo),
         dependencies,
         devDependencies,
         templatesDir: TEMPLATES_DIR,
@@ -80,13 +90,19 @@ const KIND_STYLE = {
 
 function printPlan(ctx, plan, { dryRun }) {
     ui.section('Configuration');
-    ui.keyValues([
-        ['Project', path.basename(ctx.projectRoot)],
+    const projectLabel =
+        ctx.isWorkspaceMember && ctx.packageName
+            ? `${ctx.packageName}${ctx.appRel ? c.gray(` (${ctx.appRel})`) : ''}`
+            : path.basename(ctx.projectRoot);
+    const rows = [
+        ['Project', projectLabel],
         ['Database', `${ctx.database.label} ${c.gray(`(${ctx.database.adapterPackage})`)}`],
         ['Prisma', ctx.prismaVersion],
         ['Client output', ctx.clientOutput === 'root' ? 'generated/prisma (project root)' : 'src/generated/prisma'],
         ['Package manager', `${ctx.pm.name} ${c.gray(`(${ctx.pmSource})`)}`],
-    ]);
+    ];
+    if (ctx.isWorkspaceMember) rows.push(['Workspace root', ctx.workspaceRoot]);
+    ui.keyValues(rows);
 
     ui.section(dryRun ? 'Planned changes (dry run, nothing will be modified)' : 'Planned changes');
     for (const { entries } of plan) {
@@ -157,6 +173,24 @@ function printSummary(ctx, summary) {
     }
 
     printNextSteps(ctx);
+    printTurboChecklist(ctx);
+}
+
+function printTurboChecklist(ctx) {
+    if (!ctx.turbo || !ctx.isWorkspaceMember) return;
+
+    const filter = ctx.packageName || ctx.appRel;
+    ui.section('Turbo checklist');
+    ui.out(
+        `    ${c.cyan('1.')} Add ${c.bold('generated/prisma')} to ${c.bold('tasks.build.outputs')} (${c.bold('pipeline.build.outputs')} on Turbo 1.x) if the client should be cached.`,
+    );
+    ui.out(
+        `    ${c.cyan('2.')} Make sure ${c.bold('build')} depends on ${c.bold('prisma generate')} (a task or a script).`,
+    );
+    ui.out(`    ${c.cyan('3.')} Run tasks for this app from the workspace root:`);
+    ui.out(`       ${c.cyan(`turbo run build --filter ${filter}`)}`);
+    ui.out(`    ${c.gray('turbo.json was not modified.')}`);
+    ui.out();
 }
 
 function printNextSteps(ctx) {

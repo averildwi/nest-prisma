@@ -118,4 +118,20 @@ async function confirmPlan() {
     if (!proceed) throw new CancelledError();
 }
 
-module.exports = { resolveAnswers, confirmPlan };
+/** Asks which workspace package to configure when several NestJS apps exist. */
+async function pickApp(candidates) {
+    const { app } = await prompt([
+        {
+            type: 'list',
+            name: 'app',
+            message: 'Which NestJS application should be configured?',
+            choices: candidates.map((candidate) => ({
+                name: `${candidate.name} (${candidate.rel})`,
+                value: candidate.dir,
+            })),
+        },
+    ]);
+    return app;
+}
+
+module.exports = { resolveAnswers, confirmPlan, pickApp };

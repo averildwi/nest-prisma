@@ -45,6 +45,14 @@ test('argv: --output accepts src/root and rejects anything else', () => {
     assert.throws(() => parseCliArgs(['--output', 'docs']), (e) => e.name === 'CliError' && e.exitCode === 2);
 });
 
+test('argv: --cwd and --app select a workspace package', () => {
+    const o = parseCliArgs(['--cwd', 'apps/api', '--app', '@repo/api']);
+    assert.equal(o.cwd, 'apps/api');
+    assert.equal(o.app, '@repo/api');
+    assert.equal(parseCliArgs([]).cwd, undefined);
+    assert.equal(parseCliArgs([]).app, undefined);
+});
+
 test('node range matches Prisma 7 engines', () => {
     const range = '^20.19 || ^22.12 || >=24.0';
     assert.ok(satisfiesNodeRange('v22.17.1', range));
