@@ -200,6 +200,7 @@ npx @nestjs/cli@11 new my-app --strict
 cd my-app
 npx @averildwi/nest-prisma --db postgres
 npx @averildwi/nest-common
+npx @averildwi/nest-cloudinary
 ```
 
 ## Behaviour notes
